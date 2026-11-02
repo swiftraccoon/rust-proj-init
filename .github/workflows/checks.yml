@@ -1,0 +1,49 @@
+name: Checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Rust ${{ matrix.toolchain }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        toolchain: ["1.88.0", "1.96.0"]
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust
+        run: rustup toolchain install ${{ matrix.toolchain }} --profile minimal
+      - name: Test maintenance tools
+        run: cargo +${{ matrix.toolchain }} test --manifest-path tools/reference-maintenance/Cargo.toml --locked
+      - name: Verify reference snapshots
+        run: cargo +${{ matrix.toolchain }} run --manifest-path tools/reference-maintenance/Cargo.toml --locked -- sync --check
+
+  quality:
+    name: Formatting, lints, and documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the development toolchain
+        run: rustup toolchain install 1.96.0 --profile minimal --component rustfmt --component clippy
+      - name: Check formatting
+        run: cargo +1.96.0 fmt --manifest-path tools/reference-maintenance/Cargo.toml --all -- --check
+      - name: Check lints
+        run: cargo +1.96.0 clippy --manifest-path tools/reference-maintenance/Cargo.toml --locked --all-targets -- -D warnings
+      - name: Check documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo +1.96.0 doc --manifest-path tools/reference-maintenance/Cargo.toml --locked --no-deps
